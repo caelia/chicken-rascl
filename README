@@ -1,0 +1,22 @@
+RASCL's a Simple Configuration Language
+=======================================
+
+RASCL is a simple declarative language for runtime application
+configuration. Its distinguishing characteristics include:
+
+ * Similar to JSON, but supports comments, and does not require strings to
+   be quoted, except when necessary to distinguish them from other data
+   types.
+
+ * Allows simple configurations to be written simply by people with minimal
+   technical knowledge, while supporting several widely-used data types,
+   including strings, numeric types, booleans, lists, and dictionaries.
+   Nested data structures are also supported.
+
+For further information on the RASCL language, see
+http://matt.gushee.net/rascl/.
+
+This is the Chicken Scheme implementation of RASCL. In addition to the basic
+language features, this implementation guarantees to preserve the order of
+the configuration file, so that configurations can be written either
+programmatically or using a text editor without issues.
