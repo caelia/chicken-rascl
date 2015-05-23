@@ -1,0 +1,502 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml"><head>
+<title>comparse - The Chicken Scheme wiki</title>
+<meta http-equiv="Content-Style-Type" content="text/css">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<link rel="stylesheet" type="text/css" href="comparse-egg_files/chicken.css"></head>
+<body>
+<div id="menu">
+<ul>
+<li><a href="http://wiki.call-cc.org/" class="internal">Wiki</a></li>
+<li><a href="http://code.call-cc.org/" class="external">Download</a></li>
+<li><a href="http://wiki.call-cc.org/manual/index" class="internal">Manual</a></li>
+<li><a href="http://wiki.call-cc.org/eggs" class="internal">Eggs</a></li>
+<li><a href="http://api.call-cc.org/doc/" class="external">API</a></li>
+<li><a href="http://tests.call-cc.org/" class="external">Tests</a></li>
+<li><a href="http://bugs.call-cc.org/" class="external">Bugs</a></li></ul></div>
+<div id="search">
+<form action="/search">
+<div><label>free text<input name="text" type="text"></label><label>identifier<input name="ident" type="text"></label><input value="search" type="submit"><a href="http://wiki.call-cc.org/search-help">search help</a></div></form></div>
+<ul id="page-specific-links">
+<li><a href="http://wiki.call-cc.org/eggref/4/comparse?action=show">show</a></li>
+<li><a href="http://wiki.call-cc.org/eggref/4/comparse?action=edit" rel="nofollow">edit</a></li>
+<li><a href="http://wiki.call-cc.org/eggref/4/comparse?action=history">history</a></li></ul>
+<div id="content">
+<ul class="tags">
+<li>egg</li></ul>
+<h2 id="comparse">comparse</h2>
+<p>Comparse is a library of <a href="http://en.wikipedia.org/wiki/Parser_combinator" class="external">parser combinators</a> similar to <a href="http://www.haskell.org/haskellwiki/Parsec" class="external">Haskell's Parsec</a>. Its implementation is based on <a href="https://github.com/drewc/smug" class="external">Drew Crampsie's smug for Common Lisp</a> but slightly deviates in naming and provides a number of additional convenience combinators.</p>
+<div id="toc">
+<ol>
+<li><a href="#comparse">comparse</a>
+<ol>
+<li><a href="#caveat">Caveat</a></li>
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#a-note-on-variadic-combinators">A note on variadic combinators</a></li>
+<li><a href="#api">API</a></li>
+<li><a href="#examples">Examples</a>
+<ol>
+<li><a href="#rfc-3339-timestamps">RFC 3339 timestamps</a></li></ol></li>
+<li><a href="#about-this-egg">About this egg</a>
+<ol>
+<li><a href="#source">Source</a></li>
+<li><a href="#author">Author</a></li>
+<li><a href="#version-history">Version history</a></li>
+<li><a href="#license">License</a></li></ol></li></ol></li></ol></div>
+<h3 id="caveat">Caveat</h3>
+<p>As of now the API documentation is still incomplete, notably missing the main entry point procedure <tt>parse</tt>.</p>
+<h3 id="introduction">Introduction</h3>
+<p>Comparse provides a library of <i>parsers</i> which can be applied to <i>inputs</i> in order to produce <i>parse results</i>. It also provides <i>parser combinators</i> to create new parsers. In Comparse inputs are represented by a <tt>parser-input</tt> type. It can hold a sequence of any kinds of <i>items</i> (often characters). For example, we can define an input sequence of characters like this:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default">use comparse</span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> some-input
+  <span class="paren2">(<span class="default">-&gt;parser-input <span class="string">"hello world"</span></span>)</span></span>)</span></tt></pre>
+<p>A <i>parser</i> then is a function which takes an <i>input</i> as its argument and, in case the parse succeeds, returns a <i>parse result</i> (which can be a value of any kind) and the <i>remainder</i> of the input (which is a <tt>parser-input</tt> again). In case the parse fails it returns <tt>#f</tt>.</p>
+<p>A very basic parser provided by Comparse is the <tt>item</tt> parser which consumes one item from the given input and returns it as its parse result. If the input is empty, <tt>item</tt> fails. We can apply it to the input we defined above using the <tt>parse</tt> procedure:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default">parse item some-input</span>)</span></tt></pre>
+<p>Which gives us these results:</p>
+<pre><tt class="highlight scheme-language"><span class="character">#\h</span>
+#&lt;parser-input <span class="character">#\e</span> <span class="character">#\l</span> <span class="character">#\l</span> <span class="character">#\o</span> <span class="character">#\space</span> <span class="character">#\w</span> <span class="character">#\o</span> <span class="character">#\r</span> <span class="character">#\l</span> <span class="character">#\d</span> ...&gt;</tt></pre>
+<p>There is another basic parser called <tt>fail</tt> which always 
+fails, no matter what's passed to it. These primitive parsers are not 
+very useful on their own, of course. In order to do more interesting 
+things Comparse provides a selection of <i>parser combinators</i>. Just like regular function combinators (such as <tt>compose</tt> or <tt>complement</tt>),
+ parser combinators are functions which take one or more parsers as 
+their arguments and combine them into a new parser. One of the basic 
+parser combinators in Comparse is <tt>bind</tt>. It takes a parser and a
+ procedure as its arguments and returns a parser which first applies the
+ passed parser and, if it succeeds, calls the procedure with its parse 
+result. The procedure then must return another parser which will be 
+applied to the remainder of the parser that was passed to <tt>bind</tt>. Okay, that sounds pretty dazzling, so an example is in order:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> double-item
+  <span class="paren2">(<span class="default">bind item <span class="paren3">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren4">(<span class="default">x</span>)</span>
+               <span class="paren4">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren5">(<span class="default">remainder</span>)</span>
+                 <span class="comment">;; Note that unlike the `parse' procedure, the
+</span>                 <span class="comment">;; internal parser API does not expect multiple
+</span>                 <span class="comment">;; return values but rather a pair of values on
+</span>                 <span class="comment">;; successful parse.
+</span>                 <span class="paren5">(<span class="default">cons <span class="paren6">(<span class="default">list x x</span>)</span> remainder</span>)</span></span>)</span></span>)</span></span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default">parse double-item some-input</span>)</span></tt></pre>
+<p>Which gives us:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><span class="character">#\h</span> <span class="character">#\h</span></span>)</span>
+#&lt;parser-input <span class="character">#\e</span> <span class="character">#\l</span> <span class="character">#\l</span> <span class="character">#\o</span> <span class="character">#\space</span> <span class="character">#\w</span> <span class="character">#\o</span> <span class="character">#\r</span> <span class="character">#\l</span> <span class="character">#\d</span> ...&gt;</tt></pre>
+<p>So the procedure we pass to <tt>bind</tt> returns a parser which 
+constructs a two-item list from the parse result and returns it with the
+ untouched remainder. As returning a result from a parser without 
+touching the remainder is needed quite frequently, Comparse provides the
+ <tt>result</tt> parser combinator which does just that. Using it we can write <tt>double-item</tt> like this:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> double-item
+  <span class="paren2">(<span class="default">bind item <span class="paren3">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren4">(<span class="default">x</span>)</span>
+               <span class="paren4">(<span class="default">result <span class="paren5">(<span class="default">list x x</span>)</span></span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>Comparse provides many convenient and more high-level parser combinators than the ones presented in this introdution. See the <a href="#examples" class="internal">Examples section</a>
+ on how to use them to create parsers for practical tasks. Also note 
+that you would usually not manually convert raw inputs (like strings or 
+input ports) into a <tt>parser-input</tt> object like we did above. Instead you can pass the raw input object directly to the <tt>parse</tt> procedure which will automatically turn it into a <tt>parser-input</tt> for you.</p>
+<h3 id="a-note-on-variadic-combinators">A note on variadic combinators</h3>
+<p>Some parser combinators accept one or more parsers as their 
+arguments. As a convenience when just one argument is passed and it is a
+ list instead of a parser, that list is treated as the argument list. In
+ other words those combinators implicitly <tt>apply</tt> themselves to the given (single) list argument.</p>
+<h3 id="api">API</h3><span class="definition procedure"><em>[procedure]</em> <tt>(result value)</tt>
+<br></span>
+<p>Returns a parser which always succeeds, returning <tt>value</tt> as the parse result and the untouched input as the remainder.</p><span class="definition procedure"><em>[procedure]</em> <tt>(fail input)</tt>
+<br></span>
+<p>A parser which always fails.</p><span class="definition procedure"><em>[procedure]</em> <tt>(item input)</tt>
+<br></span>
+<p>A parser which consumes and returns the first item of <tt>input</tt>, i.e. it returns that item as the parse result and the tail of <tt>input</tt> as the remainder. Fails if <tt>input</tt> is empty.</p><span class="definition procedure"><em>[procedure]</em> <tt>(end-of-input input)</tt>
+<br></span>
+<p>A parser which returns <tt>#t</tt> as the parse result and the untouched <tt>input</tt> as the remainder if <tt>input</tt> is empty.</p><span class="definition procedure"><em>[procedure]</em> <tt>(bind parser proc)</tt>
+<br></span>
+<p>Returns a parser which applies <tt>parser</tt> and calls <tt>proc</tt> with its parse result if it succeeds. <tt>proc</tt> must return a parser which will be applied to the remainder returned by <tt>parser</tt>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(satisfies condition . args)</tt>
+<br></span>
+<p>Returns a parser which consumes the next <tt>item</tt> of its input and applies <tt>condition</tt> to it like this: <tt>(apply condition item args)</tt>. If that call returns <tt>#f</tt>, the parser fails. Otherwise it succeeds and returns the item as its result.</p><span class="definition procedure"><em>[procedure]</em> <tt>(is x)</tt>
+<br></span>
+<p>Returns a parser which succeeds when the next <tt>item</tt> of its input is <tt>eq?</tt> to <tt>x</tt>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(in collection . items)</tt>
+<br></span>
+<p>Returns a parser which succeeds when the next item of the given input is contained in <tt>collection</tt>. Collection can be a <a href="http://srfi.schemers.org/srfi-14/srfi-14.html" class="external">SRFI 14 char-set</a> or a list which is checked for membership with <tt>memq</tt>. Given more than one argument, membership of the next item is checked for with <tt>memq</tt> in <tt>(cons collection items)</tt>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(sequence parser . parsers)</tt>
+<br></span>
+<p>Returns a parser which applies the given parsers from left to right 
+and returns the list of their results when all succeed. See also the <a href="#a-note-on-variadic-combinators" class="internal">note on variadic combinators</a>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(char-seq str)</tt>
+<br></span>
+<p>Returns a parser which consumes the chars of the given string <tt>str</tt> in the order contained therein, i.e. it parses a literal string. On success the parser returns <tt>str</tt>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(any-of parser . parsers)</tt>
+<br></span>
+<p>Returns a parser which applies the given parsers from left to right 
+and returns the result of the first one that succeeds. See also the <a href="#a-note-on-variadic-combinators" class="internal">note on variadic combinators</a>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(all-of parser . parsers)</tt>
+<br></span>
+<p>Returns a parser which applies the given parsers from left to right 
+and returns the result of the last one if all succeed. See also the <a href="#a-note-on-variadic-combinators" class="internal">note on variadic combinators</a>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(none-of parser . parsers)</tt>
+<br></span>
+<p>Returns a parser which applies the given parsers from left to right and returns <tt>#t</tt> as its result if none of them succeed while it doesn't consume any items from the input. See also the <a href="#a-note-on-variadic-combinators" class="internal">note on variadic combinators</a>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(none-of* parser [parsers ...] but)</tt>
+<br></span>
+<p>Returns a parser which applies the given parsers from left to right. If none of them succeed, it applies the parser <tt>but</tt> and returns its result.</p><span class="definition procedure"><em>[procedure]</em> <tt>(preceded-by parser . parsers)</tt>
+<br></span>
+<p>Returns a parser which applies the given parsers from left to right 
+to the input or the remainder of the preceding parser, respectively, and
+ returns the result of the last one. See also the <a href="#a-note-on-variadic-combinators" class="internal">note on variadic combinators</a>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(followed-by parser following-parser . following-parsers)</tt>
+<br></span>
+<p>Returns a parser which applies <tt>parser</tt> if the given <tt>following-parser[s]</tt> succeed on its remainder from left to right. See also the <a href="#a-note-on-variadic-combinators" class="internal">note on variadic combinators</a> which applies to the <tt>following-parser[s]</tt> argument(s) in this case.</p><span class="definition procedure"><em>[procedure]</em> <tt>(enclosed-by open content close)</tt>
+<br></span>
+<p>Returns a parser which applies the given parsers <tt>open</tt>, <tt>content</tt>, and <tt>close</tt> in that order to the input or the remainder of the preceding parser, respectively, and returns the result of <tt>content</tt> with the remainder of <tt>close</tt>.</p><span class="definition procedure"><em>[procedure]</em> <tt>(maybe parser)</tt>
+<br></span>
+<p>Returns a parser which applies <tt>parser</tt> to the input and returns its result and remainder if it succeeds. Otherwise it returns <tt>#f</tt> as the parse result and the untouched input as the remainder.</p><span class="definition procedure"><em>[procedure]</em> <tt>(zero-or-more parser)</tt>
+<br></span>
+<p>Returns a parser which applies <tt>parser</tt> to its input. If that fails, it returns <tt>()</tt> as the parse result and the untouched input as the remainder. Otherwise it applies <tt>parser</tt>
+ again to the remainder of the previous application and so forth, 
+collecting all parse result in a list. That list is then returned as the
+ parse result and the remainder of the last successful application of <tt>parser</tt> as the remainder.</p><span class="definition procedure"><em>[procedure]</em> <tt>(one-or-more parser)</tt>
+<br></span>
+<p>Returns a parser which applies <tt>parser</tt> to its input. If that fails, it also fails. Otherwise it applies <tt>parser</tt>
+ again to the remainder of the previous application and so forth, 
+collecting all parse result in a list. That list is then returned as the
+ parse result and the remainder of the last successful application of <tt>parser</tt> as the remainder.</p>
+<h3 id="examples">Examples</h3>
+<h4 id="rfc-3339-timestamps">RFC 3339 timestamps</h4>
+<p><a href="http://www.ietf.org/rfc/rfc3339.txt" class="external">RFC 3339</a> specifies the Internet timestamp format. It looks like this:</p>
+<pre><tt> 2015-04-19T19:50:36Z</tt></pre>
+<p>Let's try to implement a parser for it. Thankfully, section 5.6 of 
+the RFC contains an ABNF grammar which is a good thing to start from:</p>
+<pre><tt> date-fullyear   = 4DIGIT
+ date-month      = 2DIGIT  ; 01-12
+ date-mday       = 2DIGIT  ; 01-28, 01-29, 01-30, 01-31 based on
+                           ; month/year
+ time-hour       = 2DIGIT  ; 00-23
+ time-minute     = 2DIGIT  ; 00-59
+ time-second     = 2DIGIT  ; 00-58, 00-59, 00-60 based on leap second
+                           ; rules
+ time-secfrac    = "." 1*DIGIT
+ time-numoffset  = ("+" / "-") time-hour ":" time-minute
+ time-offset     = "Z" / time-numoffset
+ 
+ partial-time    = time-hour ":" time-minute ":" time-second
+                   [time-secfrac]
+ full-date       = date-fullyear "-" date-month "-" date-mday
+ full-time       = partial-time time-offset
+ 
+ date-time       = full-date "T" full-time</tt></pre>
+<p>We can start by transcribing the grammar into Comparse. To that end, 
+we start by defining two utility parsers for parsing digits:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default">use comparse srfi-14</span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> digit
+  <span class="paren2">(<span class="default">in char-set:digit</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> <span class="paren2">(<span class="default">digits n</span>)</span>
+  <span class="paren2">(<span class="default">as-string <span class="paren3">(<span class="default">repeated digit n</span>)</span></span>)</span></span>)</span></tt></pre>
+<p>Using these and Comparse's built-in combinators we can define our RFC
+ 3339 parser along the ABNF grammar in a pretty straight forward 
+fashion:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> date-fullyear
+  <span class="paren2">(<span class="default">digits 4</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> date-month
+  <span class="paren2">(<span class="default">digits 2</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> date-mday
+  <span class="paren2">(<span class="default">digits 2</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-hour
+  <span class="paren2">(<span class="default">digits 2</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-minute
+  <span class="paren2">(<span class="default">digits 2</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-second
+  <span class="paren2">(<span class="default">digits 2</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-secfrac
+  <span class="paren2">(<span class="default">preceded-by <span class="paren3">(<span class="default">is <span class="character">#\.</span></span>)</span> <span class="paren3">(<span class="default">as-string <span class="paren4">(<span class="default">one-or-more digit</span>)</span></span>)</span></span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-numoffset
+  <span class="paren2">(<span class="default">sequence <span class="paren3">(<span class="default">in <span class="character">#\+</span> <span class="character">#\-</span></span>)</span> time-hour <span class="paren3">(<span class="default">is <span class="character">#\:</span></span>)</span> time-minute</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-offset
+  <span class="paren2">(<span class="default">any-of <span class="paren3">(<span class="default">is <span class="character">#\Z</span></span>)</span> time-numoffset</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> partial-time
+  <span class="paren2">(<span class="default">sequence time-hour <span class="paren3">(<span class="default">is <span class="character">#\:</span></span>)</span>
+            time-minute <span class="paren3">(<span class="default">is <span class="character">#\:</span></span>)</span>
+            time-second
+            <span class="paren3">(<span class="default">maybe time-secfrac</span>)</span></span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> full-date
+  <span class="paren2">(<span class="default">sequence date-fullyear <span class="paren3">(<span class="default">is <span class="character">#\-</span></span>)</span>
+            date-month <span class="paren3">(<span class="default">is <span class="character">#\-</span></span>)</span>
+            date-mday</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> full-time
+  <span class="paren2">(<span class="default">sequence partial-time time-offset</span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> date-time
+  <span class="paren2">(<span class="default">sequence full-date <span class="paren3">(<span class="default">is <span class="character">#\T</span></span>)</span> full-time</span>)</span></span>)</span></tt></pre>
+<p>Note that each rule is a parser itself which we can test individually. Let's try some examples in the REPL:</p>
+<pre><tt> #;1&gt; (parse date-fullyear "1891")
+ "1891"
+ #&lt;parser-input-end&gt;
+ ; 2 values
+ 
+ #;2&gt; (parse full-date "1927-09-04")
+ ("1927" #\- "09" #\- "04")
+ #&lt;parser-input-end&gt;
+ ; 2 values
+ 
+ #;3&gt; (parse time-offset "+00:30")
+ (#\+ "00" #\: "30")
+ #&lt;parser-input-end&gt;
+ ; 2 values</tt></pre>
+<p>And finally, a full timestamp:</p>
+<pre><tt> #;4&gt; (parse date-time "2015-04-19T19:50:36Z")
+ (("2015" #\- "04" #\- "19") #\T (("19" #\: "50" #\: "36" #f) #\Z))
+ #&lt;parser-input-end&gt;
+ ; 2 values</tt></pre>
+<p>That's pretty good already. It leaves a few things to be desired, 
+though. For one, it would be nicer to have the date and time components 
+to be returned as numbers rather than strings. One way to achieve this 
+would be to walk the parse result and turn all strings into numbers in a
+ separate post-processing step. A nicer approach would be to have the <tt>digits</tt> parser yield numbers directly. We could define an <tt>as-number</tt> combinator that works like the built-in <tt>as-string</tt> combinator:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> <span class="paren2">(<span class="default">as-number parser</span>)</span>
+  <span class="paren2">(<span class="default">bind <span class="paren3">(<span class="default">as-string parser</span>)</span>
+        <span class="paren3">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren4">(<span class="default">s</span>)</span>
+          <span class="paren4">(<span class="default">result <span class="paren5">(<span class="default">string-&gt;number s</span>)</span></span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>The resulting parser tries to apply the given <tt>parser</tt>, turns 
+its result into a string if it succeeded and then passes that string to 
+our anonymous procedure which turns it into a number via <tt>string-&gt;number</tt>, returning it as the parse result via the <tt>result</tt> combinator. Let's give it a whirl:</p>
+<pre><tt> #;5&gt; (parse (as-number (one-or-more digit)) "123")
+ 123
+ #&lt;parser-input-end&gt;
+ ; 2 values</tt></pre>
+<p>Looks good! We could even get extra fancy and apply some more higher-order functional programming voodoo by using the <tt>o</tt> procedure from the <tt>data-structures</tt> unit:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> <span class="paren2">(<span class="default">as-number parser</span>)</span>
+  <span class="paren2">(<span class="default">bind <span class="paren3">(<span class="default">as-string parser</span>)</span>
+        <span class="paren3">(<span class="default">o result string-&gt;number</span>)</span></span>)</span></span>)</span></tt></pre>
+<p>Now doesn't that look neat? OK, now all we have to do is swap all <tt>as-string</tt> calls with <tt>as-number</tt> calls:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> <span class="paren2">(<span class="default">digits n</span>)</span>
+  <span class="paren2">(<span class="default">as-number <span class="paren3">(<span class="default">repeated digit n</span>)</span></span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-secfrac
+  <span class="paren2">(<span class="default">preceded-by <span class="paren3">(<span class="default">is <span class="character">#\.</span></span>)</span> <span class="paren3">(<span class="default">as-number <span class="paren4">(<span class="default">one-or-more digit</span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>Then we re-evaluate the dependent definitions.  Et voilà:</p>
+<pre><tt> #;6&gt; (parse date-time "2015-04-19T19:50:36Z")
+ ((2015 #\- 4 #\- 19) #\T ((19 #\: 50 #\: 36 #f) #\Z))
+ #&lt;parser-input-end&gt;
+ ; 2 values</tt></pre>
+<p>Much better! Now wouldn't it be <i>even</i> nicer to have a slightly less messy result? How about something like this:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default">rfc3999-timestamp <span class="paren2">(<span class="default">2015 4 19</span>)</span> <span class="paren2">(<span class="default">19 50 36 #f</span>)</span> Z</span>)</span></tt></pre>
+<p>Again, we could post-process the parse result to massage it into the 
+desired shape. But let's try to do it right in the parser, too! This is a
+ task for which the <tt>sequence*</tt> syntax is really handy. First, let's redefine <tt>full-date</tt> so that it only returns the date components as a list:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> full-date
+  <span class="paren2">(<span class="default">sequence* <span class="paren3">(<span class="default"><span class="paren4">(<span class="default">year date-fullyear</span>)</span>
+              <span class="paren4">(<span class="default">_ <span class="paren5">(<span class="default">is <span class="character">#\-</span></span>)</span></span>)</span>
+              <span class="paren4">(<span class="default">month date-month</span>)</span>
+              <span class="paren4">(<span class="default">_ <span class="paren5">(<span class="default">is <span class="character">#\-</span></span>)</span></span>)</span>
+              <span class="paren4">(<span class="default">day date-mday</span>)</span></span>)</span>
+    <span class="paren3">(<span class="default">result <span class="paren4">(<span class="default">list year month day</span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>This will apply each parser on the right-hand side to the input in 
+sequence and bind their results to the identifier on the left-hand side.
+ We use <tt>_</tt> for parse results we don't care about. Let's give it a try:</p>
+<pre><tt> #;7&gt; (parse full-date "2015-04-19")
+ (2015 4 19)
+ #&lt;parser-input-end&gt;
+ ; 2 values</tt></pre>
+<p>Very well! Now we do the same for <tt>full-time</tt>, <tt>time-numoffset</tt> and <tt>time-offset</tt>:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> full-time
+  <span class="paren2">(<span class="default">sequence* <span class="paren3">(<span class="default"><span class="paren4">(<span class="default">hour time-hour</span>)</span>
+              <span class="paren4">(<span class="default">_ <span class="paren5">(<span class="default">is <span class="character">#\:</span></span>)</span></span>)</span>
+              <span class="paren4">(<span class="default">minute time-minute</span>)</span>
+              <span class="paren4">(<span class="default">_ <span class="paren5">(<span class="default">is <span class="character">#\:</span></span>)</span></span>)</span>
+              <span class="paren4">(<span class="default">second time-second</span>)</span>
+              <span class="paren4">(<span class="default">secfrac <span class="paren5">(<span class="default">maybe time-secfrac</span>)</span></span>)</span></span>)</span>
+    <span class="paren3">(<span class="default">result <span class="paren4">(<span class="default">list hour minute second secfrac</span>)</span></span>)</span></span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-numoffset
+  <span class="paren2">(<span class="default">sequence* <span class="paren3">(<span class="default"><span class="paren4">(<span class="default">signum <span class="paren5">(<span class="default">in <span class="character">#\+</span> <span class="character">#\-</span></span>)</span></span>)</span>
+              <span class="paren4">(<span class="default">hour time-hour</span>)</span>
+              <span class="paren4">(<span class="default">_ <span class="paren5">(<span class="default">is <span class="character">#\:</span></span>)</span></span>)</span>
+              <span class="paren4">(<span class="default">minute time-minute</span>)</span></span>)</span>
+    <span class="paren3">(<span class="default">result <span class="paren4">(<span class="default">list <span class="paren5">(<span class="default"><i><span class="symbol">if</span></i> <span class="paren6">(<span class="default">eq? <span class="character">#\+</span> signum</span>)</span> '+ '-</span>)</span>
+                  hour
+                  minute</span>)</span></span>)</span></span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-offset
+  <span class="paren2">(<span class="default">any-of <span class="paren3">(<span class="default">bind <span class="paren4">(<span class="default">is <span class="character">#\Z</span></span>)</span> <span class="paren4">(<span class="default">constantly <span class="paren5">(<span class="default">result 'Z</span>)</span></span>)</span></span>)</span>
+          time-numoffset</span>)</span></span>)</span></tt></pre>
+<p>And finally we can put together the new <tt>date-time</tt>:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> date-time
+  <span class="paren2">(<span class="default">sequence* <span class="paren3">(<span class="default"><span class="paren4">(<span class="default">date full-date</span>)</span>
+              <span class="paren4">(<span class="default">_ <span class="paren5">(<span class="default">is <span class="character">#\T</span></span>)</span></span>)</span>
+              <span class="paren4">(<span class="default">time full-time</span>)</span>
+              <span class="paren4">(<span class="default">offset time-offset</span>)</span></span>)</span>
+    <span class="paren3">(<span class="default">result <span class="paren4">(<span class="default">list 'rfc3339-timestamp
+                  date
+                  time
+                  offset</span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>Let's see if it actually works:</p>
+<pre><tt> #;8&gt; (parse date-time "2015-04-19T19:50:36Z")
+ (rfc3339-timestamp (2015 4 19) (19 50 36 #f) Z)
+ #&lt;parser-input-end&gt;
+ ; 2 values</tt></pre>
+<p>Rejoice! But there's another issue. Take a look a the ABNF grammar 
+again and note the comments next to some of the rules which further 
+constrain the various timestamp components. Currently, our parser also 
+accepts bogus timestamps such as <tt>2015-38-76T91:68:82Z</tt>. It would
+ certainly be nice if we could enforce those constraints in the parser, 
+too—and it looks like the RFC authors would have liked to be able to do 
+that, as well, given that they put the comments right next to the 
+grammar rules.</p>
+<p>Again, there are various ways to approach this. As always, we could 
+just validate the timestamp components in a post-processing procedure 
+but that would of course spatially distance the constraints from the 
+grammar rules they refer to.</p>
+<p>One way to do it in the parser itself would be to encode the valid digit sequences in the grammar, e.g. <tt>time-hour</tt> could be changed like this to satisfy the constraints:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-hour
+  <span class="paren2">(<span class="default">as-string
+   <span class="paren3">(<span class="default">any-of <span class="paren4">(<span class="default">sequence <span class="paren5">(<span class="default">is <span class="character">#\0</span></span>)</span> digit</span>)</span>
+           <span class="paren4">(<span class="default">sequence <span class="paren5">(<span class="default">is <span class="character">#\1</span></span>)</span> digit</span>)</span>
+           <span class="paren4">(<span class="default">sequence <span class="paren5">(<span class="default">is <span class="character">#\2</span></span>)</span> <span class="paren5">(<span class="default">in <span class="character">#\1</span> <span class="character">#\2</span> <span class="character">#\3</span> <span class="character">#\4</span></span>)</span></span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>As you can imagine, this gets boring quickly, and in the case of <tt>date-mday</tt> this approach wouldn't work anyway since the range of valid values depends on the given year and month.</p>
+<p>A more convenient approach is to put the constraint logic directly into a <tt>bind</tt> or <tt>sequence*</tt> body. Applied to the <tt>time-hour</tt> parser we get something like this:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-hour
+  <span class="paren2">(<span class="default">bind <span class="paren3">(<span class="default">digits 2</span>)</span>
+        <span class="paren3">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren4">(<span class="default">hour</span>)</span>
+          <span class="paren4">(<span class="default"><i><span class="symbol">if</span></i> <span class="paren5">(<span class="default">&lt;= 0 hour 23</span>)</span>
+              <span class="paren5">(<span class="default">result hour</span>)</span>
+              fail</span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>So in case <tt>hour</tt> is within the given range, we return a <tt>result</tt> parser with the valid hour as the value, otherwise we return the <tt>fail</tt>
+ parser which—as the name suggests—always fails. Since we need this kind
+ of range check for various parsers, we could create a helper procedure <tt>constrained</tt> like this:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> <span class="paren2">(<span class="default">constrained parser pred</span>)</span>
+  <span class="paren2">(<span class="default">bind parser
+        <span class="paren3">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren4">(<span class="default">val</span>)</span>
+          <span class="paren4">(<span class="default"><i><span class="symbol">if</span></i> <span class="paren5">(<span class="default">pred val</span>)</span>
+              <span class="paren5">(<span class="default">result val</span>)</span>
+              fail</span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>And now we can use it to define our various static constraints:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> date-month
+  <span class="paren2">(<span class="default">constrained <span class="paren3">(<span class="default">digits 2</span>)</span>
+               <span class="paren3">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren4">(<span class="default">month</span>)</span>
+                 <span class="paren4">(<span class="default">&lt;= 1 month 12</span>)</span></span>)</span></span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-hour
+  <span class="paren2">(<span class="default">constrained <span class="paren3">(<span class="default">digits 2</span>)</span>
+               <span class="paren3">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren4">(<span class="default">hour</span>)</span>
+                 <span class="paren4">(<span class="default">&lt;= 0 hour 23</span>)</span></span>)</span></span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> time-minute
+  <span class="paren2">(<span class="default">constrained <span class="paren3">(<span class="default">digits 2</span>)</span>
+               <span class="paren3">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren4">(<span class="default">minute</span>)</span>
+                 <span class="paren4">(<span class="default">&lt;= 0 minute 59</span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>Now what about constraints for a parser like <tt>date-mday</tt> which
+ depends on the result of other parsers? Easy: We just turn it into a 
+procedure which dynamically constructs the parser based on the year and 
+month passed to it (see RFC 3339 section 5.7 for details):</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> <span class="paren2">(<span class="default">leap-year? year</span>)</span>
+  <span class="paren2">(<span class="default">and <span class="paren3">(<span class="default">zero? <span class="paren4">(<span class="default">modulo year 4</span>)</span></span>)</span>
+       <span class="paren3">(<span class="default">or <span class="paren4">(<span class="default">not <span class="paren5">(<span class="default">zero? <span class="paren6">(<span class="default">modulo year 100</span>)</span></span>)</span></span>)</span>
+           <span class="paren4">(<span class="default">zero? <span class="paren5">(<span class="default">modulo year 400</span>)</span></span>)</span></span>)</span></span>)</span></span>)</span>
+
+<span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> <span class="paren2">(<span class="default">date-mday year month</span>)</span>
+  <span class="paren2">(<span class="default">constrained <span class="paren3">(<span class="default">digits 2</span>)</span>
+               <span class="paren3">(<span class="default"><i><span class="symbol">lambda</span></i> <span class="paren4">(<span class="default">day</span>)</span>
+                 <span class="paren4">(<span class="default">&lt;= 1 day
+                     <span class="paren5">(<span class="default">case month
+                       <span class="paren6">(<span class="default"><span class="paren1">(<span class="default">1 3 5 7 8 10 12</span>)</span> 31</span>)</span>
+                       <span class="paren6">(<span class="default"><span class="paren1">(<span class="default">4 6 9 11</span>)</span> 30</span>)</span>
+                       <span class="paren6">(<span class="default"><span class="paren1">(<span class="default">2</span>)</span> <span class="paren1">(<span class="default"><i><span class="symbol">if</span></i> <span class="paren2">(<span class="default">leap-year? year</span>)</span>
+                                29
+                                28</span>)</span></span>)</span></span>)</span></span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>And now we can parse days of the Gregorian calendar with proper constraint checks:</p>
+<pre><tt> #;9&gt; (parse (date-mday 2012 2) "29")
+ 29
+ #&lt;parser-input-end&gt;
+ ; 2 values
+ 
+ #;10&gt; (parse (date-mday 2013 2) "29")
+ #f
+ #&lt;parser-input char-seq-cursor "29" ...&gt;
+ ; 2 values
+ 
+ #;11&gt; (parse (date-mday 2013 8) "30")
+ 30
+ #&lt;parser-input-end&gt;
+ ; 2 values</tt></pre>
+<p>Integrating it into the <tt>full-date</tt> parser is trivial, we just need to pass the year and month we parsed and bound before parsing the day:</p>
+<pre><tt class="highlight scheme-language"><span class="paren1">(<span class="default"><i><span class="symbol">define</span></i> full-date
+  <span class="paren2">(<span class="default">sequence* <span class="paren3">(<span class="default"><span class="paren4">(<span class="default">year date-fullyear</span>)</span>
+              <span class="paren4">(<span class="default">_ <span class="paren5">(<span class="default">is <span class="character">#\-</span></span>)</span></span>)</span>
+              <span class="paren4">(<span class="default">month date-month</span>)</span>
+              <span class="paren4">(<span class="default">_ <span class="paren5">(<span class="default">is <span class="character">#\-</span></span>)</span></span>)</span>
+              <span class="paren4">(<span class="default">day <span class="paren5">(<span class="default">date-mday year month</span>)</span></span>)</span></span>)</span>
+    <span class="paren3">(<span class="default">result <span class="paren4">(<span class="default">list year month day</span>)</span></span>)</span></span>)</span></span>)</span></tt></pre>
+<p>There we have it, a fairly complete and compliant RFC 3339 timestamp 
+parser! The astute reader may have noticed that we didn't implement 
+constraint checks for the <tt>time-second</tt> parser, yet. This is left as an exercise for the reader—don't forget about leap seconds!</p>
+<p>On another note, it usually makes sense to provide a version of the 
+top-most parser that's anchored at the input's end for stand-alone use. 
+Consider the following example:</p>
+<pre><tt> #;12&gt; (parse date-time "2015-04-21T16:39:57Z some trailing garbage")
+ (rfc3339-timestamp (2015 4 21) (16 39 57 #f) Z)
+ #&lt;parser-input char-seq-cursor " some trailing garbage" ...&gt;
+ ; 2 values</tt></pre>
+<p>As you can see, the <tt>date-time</tt> parser happily accepts this 
+input which probably isn't what you want in this case. This is easily 
+remedied by anchoring it at the end of input like this:</p>
+<pre><tt> #;13&gt; (parse (followed-by date-time end-of-input) "2015-04-21T16:39:57Z some trailing garbage")
+ #f
+ #&lt;parser-input char-seq-cursor "2015-04-21T16:39:57Z some trailing garbage" ...&gt;
+ ; 2 values
+ 
+ #;14&gt; (parse (followed-by date-time end-of-input) "2015-04-21T16:39:57Z")
+ (rfc3339-timestamp (2015 4 21) (16 39 57 #f) Z)
+ #&lt;parser-input-end&gt;
+ ; 2 values</tt></pre>
+<h3 id="about-this-egg">About this egg</h3>
+<h4 id="source">Source</h4>
+<p>The <a href="https://bitbucket.org/DerGuteMoritz/comparse" class="external">source code is hosted at Bitbucket</a>. Feel free to fork it and send pull requests there.</p>
+<h4 id="author">Author</h4>
+<p><a href="http://wiki.call-cc.org/users/moritz-heidkamp" class="internal">Moritz Heidkamp</a></p>
+<h4 id="version-history">Version history</h4>
+<dl>
+<dt>0.1.0</dt>
+<dd>Add <tt>parser-input</tt> wrapper type so as not to leak <tt>lazy-seq</tt> implementation detail. Add <tt>end-of-input</tt> parser. Improve performance of <tt>as-string</tt> and <tt>repeated</tt> combinators.</dd>
+<dt>0.0.5</dt>
+<dd>Turn <tt>latch</tt> into compile-time dependency</dd>
+<dt>0.0.4</dt>
+<dd>Fix potential apply limit exceedance in <tt>as-string</tt>. Extend <tt>repeated</tt> to parse exactly <tt>n</tt> repetitions.</dd>
+<dt>0.0.3</dt>
+<dd>Correct dependencies</dd>
+<dt>0.0.2</dt>
+<dd>Add memoization support</dd>
+<dt>0.0.1</dt>
+<dd>Initial release</dd></dl>
+<h4 id="license">License</h4>
+<pre><tt> Copyright (c) 2013-2015, Moritz Heidkamp
+ All rights reserved.
+ 
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions are
+ met:
+ 
+ Redistributions of source code must retain the above copyright
+ notice, this list of conditions and the following disclaimer.
+ 
+ Redistributions in binary form must reproduce the above copyright
+ notice, this list of conditions and the following disclaimer in the
+ documentation and/or other materials provided with the distribution.
+ 
+ Neither the name of the author nor the names of its contributors may
+ be used to endorse or promote products derived from this software
+ without specific prior written permission.
+ 
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS
+ FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE
+ COPYRIGHT HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+ INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ OF THE POSSIBILITY OF SUCH DAMAGE.</tt></pre></div></body></html>
