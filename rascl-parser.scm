@@ -1,34 +1,36 @@
-(* rascl.l -- Copyright © 2012 by Matthew C. Gushee 
-   This program is free software, released under the terms of the BSD
-   license. See the file LICENSE for details. *)
+;;; rascl-parser.scm -- A parser for the rascl egg.
+;;;   Copyright © 2015 by Matthew C. Gushee <matt@gushee.net>
+;;;   This program is open-source software, released under the
+;;;   BSD license. See the accompanying LICENSE file for details.
 
-; {
-;   open RasclParser
-; 
-;   exception LexerError of string
-; 
-;   let sym_or_recurse symopt act =
-;     match symopt with
-;     | Some s -> s
-;     | None -> act
-; 
-;   let char_for_backslash ch =
-;     match ch with
-;     | 'a' -> '\007'
-;     | 'v' -> '\011'
-;     | 'f' -> '\012'
-;     | 'n' -> '\n'
-;     | 't' -> '\t'
-;     | 'b' -> '\b'
-;     | 'r' -> '\r'
-;     | c   -> c
-; 
-;   let string_buff = Buffer.create 256
-;   let reset_string_buffer () = Buffer.clear string_buff  
-;   let store_string_char c = Buffer.add_char string_buff c
-;   let store_string s = Buffer.add_string string_buff s
-;   let get_stored_string () = Buffer.contents string_buff    
-; }
+#|
+{
+  open RasclParser
+
+  exception LexerError of string
+
+  let sym_or_recurse symopt act =
+    match symopt with
+    | Some s -> s
+    | None -> act
+
+  let char_for_backslash ch =
+    match ch with
+    | 'a' -> '\007'
+    | 'v' -> '\011'
+    | 'f' -> '\012'
+    | 'n' -> '\n'
+    | 't' -> '\t'
+    | 'b' -> '\b'
+    | 'r' -> '\r'
+    | c   -> c
+
+  let string_buff = Buffer.create 256
+  let reset_string_buffer () = Buffer.clear string_buff  
+  let store_string_char c = Buffer.add_char string_buff c
+  let store_string s = Buffer.add_string string_buff s
+  let get_stored_string () = Buffer.contents string_buff    
+}
 
 bs_escapes = [ '\032' - '\255' ]
 iws = [ ' ' '\t' ]*
@@ -71,3 +73,12 @@ and inquotes = parse
   | '\n'       { raise ( LexerError "unterminated string" ) }
   | eof        { raise ( LexerError "unterminated string" ) }
   | _ as c     { store_string_char c; inquotes lexbuf }
+|#
+
+(module rascl-parser
+        *
+        (import scheme chicken)
+        (use comparse)
+
+
+) ; END MODULE
