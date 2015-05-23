@@ -1,0 +1,182 @@
+<!--?xml version="1.0" encoding="utf-8" ?-->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en"><head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="generator" content="Docutils 0.4: http://docutils.sourceforge.net/">
+<title>RASCL 1.0 Specification</title>
+<meta name="author" content="Matt Gushee">
+<meta name="date" content="June 10, 2006">
+<meta name="copyright" content="This document is licensed under the Creative Commons Attribution-NonCommercial-NoDerivs 2.5 license">
+<link rel="stylesheet" href="rascl-spec_files/techdoc01.css" type="text/css">
+</head>
+<body>
+<div class="document" id="rascl-1-0-specification">
+<h1 class="title">RASCL 1.0 Specification</h1>
+<table class="docinfo" frame="void" rules="none">
+<colgroup><col class="docinfo-name">
+<col class="docinfo-content">
+</colgroup><tbody valign="top">
+<tr><th class="docinfo-name">Author:</th>
+<td>Matt Gushee</td></tr>
+<tr><th class="docinfo-name">Version:</th>
+<td>Review draft 1</td></tr>
+<tr><th class="docinfo-name">Date:</th>
+<td>June 10, 2006</td></tr>
+<tr><th class="docinfo-name">Copyright:</th>
+<td>This document is licensed under the
+<a class="last reference" href="http://creativecommons.org/licenses/by-nc-nd/2.5/">Creative Commons Attribution-NonCommercial-NoDerivs 2.5 license</a></td></tr>
+</tbody>
+</table>
+<div class="section">
+<h1><a id="introduction" name="introduction">1&nbsp;&nbsp;&nbsp;Introduction</a></h1>
+<p>RASCL stands for RASCL's A Simple Configuration Language. RASCL is
+intended for use in software configuration files. As its name suggests,
+it does not support all possible use cases; rather, it attempts to be
+intuitive and easy to use, both for end users and implementors. This
+document is a technical description of the language, consisting of an
+English-language description and an EBNF syntax definition. If you are
+interested in why RASCL is the way it is, you may wish to read the
+accompanying <a class="reference" href="http://matt.gushee.net/rascl/notes.html">design notes</a>. For example configuration files written in
+RASCL, see the <a class="reference" href="http://matt.gushee.net/rascl/examples.html">examples</a>.</p>
+</div>
+<div class="section">
+<h1><a id="description" name="description">2&nbsp;&nbsp;&nbsp;Description</a></h1>
+<div class="section">
+<h2><a id="data-types-and-structures" name="data-types-and-structures">2.1&nbsp;&nbsp;&nbsp;Data types and structures</a></h2>
+<div class="section">
+<h3><a id="primitives" name="primitives">2.1.1&nbsp;&nbsp;&nbsp;Primitives</a></h3>
+<p>Four primitive data types are supported:</p>
+<blockquote>
+<ul class="simple">
+<li>integer</li>
+<li>float,</li>
+<li>boolean, and</li>
+<li>string.</li>
+</ul>
+</blockquote>
+<p>Integers may be written in decimal, octal, or hexadecimal notation.
+Hexadecimal numbers are prefixed with <tt class="docutils literal"><span class="pre">0x</span></tt>, and octals with <tt class="docutils literal"><span class="pre">0o</span></tt>.</p>
+<p>Floating point syntax follows the OCaml convention, where at least one
+digit is required before the decimal point, but there can be zero or
+more digits after the decimal point. E.g., <tt class="docutils literal"><span class="pre">3.14159</span></tt>, <tt class="docutils literal"><span class="pre">0.7</span></tt>, and
+<tt class="docutils literal"><span class="pre">225.</span></tt> are all valid floats, but <tt class="docutils literal"><span class="pre">.03</span></tt> is invalid.</p>
+<p>The boolean type consists of the words <tt class="docutils literal"><span class="pre">true</span></tt> and <tt class="docutils literal"><span class="pre">false</span></tt> in any
+combination of upper and lower case; thus, <tt class="docutils literal"><span class="pre">true</span></tt>, <tt class="docutils literal"><span class="pre">FALSE</span></tt>, <tt class="docutils literal"><span class="pre">truE</span></tt>,
+<tt class="docutils literal"><span class="pre">False</span></tt>, and <tt class="docutils literal"><span class="pre">tRUe</span></tt> are all valid booleans.</p>
+<p>Finally, any group of characters that does not match any other data type
+is considered a string; in general, double quotes are not required, but
+they may be used to force a value to be interpreted as a string when it
+would otherwise be parsed as a different type, or when the string
+contains unescaped special characters.</p>
+</div>
+<div class="section">
+<h3><a id="lists" name="lists">2.1.2&nbsp;&nbsp;&nbsp;Lists</a></h3>
+<p>A list is a homogenous ordered collection consisting of zero or more
+elements of one of the primitive types, enclosed in square brackets
+(<tt class="docutils literal"><span class="pre">[</span> <span class="pre">..</span> <span class="pre">]</span></tt>) and separated by commas and/or newlines.</p>
+</div>
+<div class="section">
+<h3><a id="dictionaries" name="dictionaries">2.1.3&nbsp;&nbsp;&nbsp;Dictionaries</a></h3>
+<p>A dictionary consists of zero or more key-value pairs separated by
+commas and/or newlines. With the exception noted in <a class="reference" href="#file-structure">File structure</a>, a
+dictionary must be enclosed in curly braces (<tt class="docutils literal"><span class="pre">{</span> <span class="pre">..</span> <span class="pre">}</span></tt>). A key-value pair
+consists of a string key and a value, which may be of any data type,
+separated by a colon (<tt class="docutils literal"><span class="pre">:</span></tt>); the colon may be preceded and followed by
+one or more white space characters. Note that while this specification
+allows any string to be used as a key (and requires a RASCL parser to
+accept any string), it may be desirable in practice to require keys to
+be valid identifiers in the target programming language.</p>
+<p>Comments and blank lines may occur anywhere in a multiline dictionary.</p>
+</div>
+</div>
+<div class="section">
+<h2><a id="comments" name="comments">2.2&nbsp;&nbsp;&nbsp;Comments</a></h2>
+<p>Comments are denoted with the character <tt class="docutils literal"><span class="pre">#</span></tt>. Any text beginning with
+this character and ending with the end of the line is a comment. When
+the <tt class="docutils literal"><span class="pre">#</span></tt> character occurs within a double-quoted string or is escaped
+with <tt class="docutils literal"><span class="pre">\</span></tt>, it will be interpreted as a normal character.</p>
+<p>Multiline comments are not currently supported.</p>
+<p>[Note to implementors: since a newline is a separator, and a comment
+may occur at the end of a line containing non-comment values, a RASCL
+lexer should treat comments as separators]</p>
+</div>
+<div class="section">
+<h2><a id="special-characters" name="special-characters">2.3&nbsp;&nbsp;&nbsp;Special characters</a></h2>
+<p>The following characters have special meanings in RASCL:</p>
+<pre class="literal-block">'#'         Start of comment
+':'         Assignment--occurs between key and value
+'"'         String delimiter
+'\'         Escape character
+'[', ']'    List delimiters
+'{', '}'    Dictionary delimiters
+',', LF     List/dictionary separator
+</pre>
+<p>Any of these special characters may be interpreted as a normal character
+by escaping it with the escape character. Except for '"' and '', any
+special character is interpreted as a normal character when it occurs
+in a double-quoted string.</p>
+</div>
+<div class="section">
+<h2><a id="configuration-files" name="configuration-files">2.4&nbsp;&nbsp;&nbsp;Configuration files</a></h2>
+<div class="section">
+<h3><a id="file-structure" name="file-structure">2.4.1&nbsp;&nbsp;&nbsp;File structure</a></h3>
+<p>A RASCL configuration file is an implicit dictionary. This means that
+its contents consist of one dictionary as described in <a class="reference" href="#dictionaries">Dictionaries</a>,
+<em>except</em> that the opening and closing braces are omitted.</p>
+</div>
+<div class="section">
+<h3><a id="file-extensions" name="file-extensions">2.4.2&nbsp;&nbsp;&nbsp;File extensions</a></h3>
+<p>This specification does not require a RASCL file to have any particular
+extension, but <tt class="docutils literal"><span class="pre">.rsc</span></tt> is suggested.</p>
+</div>
+</div>
+</div>
+<div class="section">
+<h1><a id="formal-syntax" name="formal-syntax">3&nbsp;&nbsp;&nbsp;Formal Syntax</a></h1>
+<pre class="literal-block">dict_content   := dict_entry?
+                | dict_entry (separator dict_entry)*) separator?
+dict_entry     := dict_key inline_space* ':' inline_space* dict_value
+dict_key       := string
+dict_value     := bool
+                | integer
+                | float
+                | ustring
+                | qstring
+                | list
+                | dictionary
+list           := '[' inline_space* list_content inline_space* ']'
+list_content   := separator?
+                | bool (separator bool)* separator?
+                | int (separator int)* separator?
+                | float (separator float)* separator?
+                | string (separator string)* separator?
+dictionary     := '{' white_space* dict_content white_space* '}'
+inline_space   := #x9|#x10|#xB
+white_space    := #x9|#x10|#xA|#xB
+bool           := [Tt] [Rr] [Uu] [Ee]
+                | [Ff] [Aa] [Ll] [Ss] [Ee]
+integer        := oct_int | hex_int | dec_int
+oct_int        := '0' 'o' [0-7]+
+hex_int        := '0' 'x' [0-9A-Fa-f]+
+dec_int        := [0-9]+
+float          := [0-9]+ '.' [0-9]* | '.' [0-9]+
+string         := ustring | qstring
+ustring        := [^ ][{},:" #xA ]+
+qstring        := '"' ([#x1-#x9] | [#xB-#x21] | [#x23-#xFF] | '\' #xA | '\"')* '"'
+separator      := ','
+                | comment? #xA
+comment        := '#' [^#xA]* '\n'
+</pre>
+<div class="Footer">
+  <!--Creative Commons License--><a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/2.5/"><img alt="Creative Commons License" src="rascl-spec_files/somerights20.png" border="0"></a><br>This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/2.5/">Creative Commons Attribution-NonCommercial-NoDerivs 2.5 License</a>.<!--/Creative Commons License--><!-- <rdf:RDF xmlns="http://web.resource.org/cc/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+	<Work rdf:about="">
+		<license rdf:resource="http://creativecommons.org/licenses/by-nc-nd/2.5/" />
+	<dc:type rdf:resource="http://purl.org/dc/dcmitype/Text" />
+	</Work>
+	<License rdf:about="http://creativecommons.org/licenses/by-nc-nd/2.5/"><permits rdf:resource="http://web.resource.org/cc/Reproduction"/><permits rdf:resource="http://web.resource.org/cc/Distribution"/><requires rdf:resource="http://web.resource.org/cc/Notice"/><requires rdf:resource="http://web.resource.org/cc/Attribution"/><prohibits rdf:resource="http://web.resource.org/cc/CommercialUse"/></License></rdf:RDF> -->
+</div>
+</div>
+</div>
+
+
+</body></html>
