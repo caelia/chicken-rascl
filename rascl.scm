@@ -1,4 +1,9 @@
-(module rascl-processor
+;;; rascl.scm -- A RASCL implementation for Chicken Scheme.
+;;;   Copyright © 2013 by Matthew C. Gushee <matt@gushee.net>
+;;;   This program is open-source software, released under the
+;;;   BSD license. See the accompanying LICENSE file for details.
+
+(module rascl
         (set-system-config-path
          set-user-config-path
          load-config)
@@ -37,5 +42,4 @@
             (config-get arg data)
             (config-set arg args data)))))))
         
-
 )
