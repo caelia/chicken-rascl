@@ -7,6 +7,7 @@
         *
         (import scheme chicken)
         (import data-structures)
+        (use utils)
         (use comparse)
         (use srfi-14)
 
@@ -97,21 +98,6 @@
                 ((string-ci=? b "false") #f)))))))
 
 
-(define dict-key string~)
-
-; (define dict-value item)
-
-(define dict-entry
-  (sequence dict-key (maybe whitespace) (is #\:) (maybe whitespace) dict-value))
-
-(define dict-content
-  (sequence (maybe whitespace)
-            (maybe (sequence dict-entry (zero-or-more (sequence separator dict-entry))))
-            (maybe whitespace)))
-
-(define dict
-  (enclosed-by (is #\{) dict-content (is #\})))
-
 (define int-list-content
   (sequence integer (zero-or-more (preceded-by separator integer))))
 
@@ -140,12 +126,115 @@
                (any-of list-content (maybe whitespace))
                (is #\])))
 
-(define dict-value
-  (any-of integer float number boolean string~ list~ dict))
+(define dict-key string~)
 
-(define file-content
-  (sequence dict-content end-of-input))
+; (define-values (dict dict-content dict-entry dict-value)
+;   (letrec ((dict~
+;              (lambda ()
+;              (enclosed-by (is #\{) dict-content~ (is #\})))
+;              )
+;            (dict-content~
+;              (lambda ()
+;              (sequence (maybe whitespace)
+;                        (maybe (sequence dict-entry~
+;                                         (zero-or-more (sequence separator
+;                                                                 dict-entry~))))
+;                        (maybe whitespace)))
+;              )
+;            (dict-entry~
+;              (lambda ()
+;              (sequence dict-key
+;                        (maybe whitespace)
+;                        (is #\:)
+;                        (maybe whitespace)
+;                        dict-value~))
+;              )
+;            (dict-value~
+;              (lambda ()
+;              (any-of integer float number boolean string~ list~ dict~)))
+;              ; (any-of integer float number boolean string~ list~)))
+;            )
+;     (values (dict~) (dict-content~) (dict-entry~) (dict-value~))))
 
+(define dict #f)
+(define dict-content #f)
+(define dict-entry #f)
+(define dict-value #f)
+
+(letrec ((dict~
+           (lambda ()
+           (enclosed-by (is #\{) (dict-content~) (is #\})))
+           )
+         (dict-content~
+           (lambda ()
+           (sequence (maybe whitespace)
+                     (maybe (sequence (dict-entry~)
+                                      (zero-or-more (sequence separator
+                                                              (dict-entry~)))))
+                     (maybe whitespace)))
+           )
+         (dict-entry~
+           (lambda ()
+           (sequence dict-key
+                     (maybe whitespace)
+                     (is #\:)
+                     (maybe whitespace)
+                     (dict-value~)))
+           )
+         (dict-value~
+           (lambda ()
+           (any-of integer float number boolean string~ list~ (dict~))))
+           ; (any-of integer float number boolean string~ list~)))
+         )
+  (set! dict (dict~))
+  (set! dict-content (dict-content~))
+  (set! dict-entry (dict-entry~))
+  (set! dict-value (dict-value~)))
+
+; (define-values (dict dict-content dict-entry dict-value)
+;   (let ()
+;     (define dict~
+;       (enclosed-by (is #\{) dict-content~ (is #\})))
+;     (define dict-content~
+;       (sequence (maybe whitespace)
+;                 (maybe (sequence dict-entry~
+;                                  (zero-or-more (sequence separator
+;                                                          dict-entry~))))
+;                 (maybe whitespace)))
+;     (define dict-entry~
+;       (sequence dict-key
+;                 (maybe whitespace)
+;                 (is #\:)
+;                 (maybe whitespace)
+;                 dict-value~))
+;     (define dict-value~
+;       (any-of integer float number boolean string~ list~ dict~))
+;     (values dict~ dict-content~ dict-entry~ dict-value~)))
+
+; (define dict-value
+;   ; (any-of integer float number boolean string~ list~ dict~)))
+;   (any-of integer float number boolean string~ list~))
+; 
+; (define dict-entry
+;   (sequence dict-key
+;             (maybe whitespace)
+;             (is #\:)
+;             (maybe whitespace)
+;             dict-value))
+; 
+; (define dict-content
+;   (sequence (maybe whitespace)
+;             (maybe (sequence dict-entry
+;                              (zero-or-more (sequence separator dict-entry))))
+;             (maybe whitespace)))
+; 
+; (define dict
+;   (enclosed-by (is #\{) dict-content (is #\})))
+
+(define (parse-rascl-file filename)
+  (with-input-from-file filename
+    (lambda ()
+      (parse dict-content (read-all (current-input-port))))))
 
 ) ; END MODULE
 
