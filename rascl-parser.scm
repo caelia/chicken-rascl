@@ -8,14 +8,28 @@
         (import scheme chicken)
         (import data-structures)
         (use utils)
+        (use srfi-13)
         (use comparse)
         (use srfi-14)
 
-(define whitespace
+        ; Probably only needed for debugging
+        (use extras)
+
+(define ws+
   (one-or-more (in char-set:whitespace)))
 
+(define ws*
+  (zero-or-more (in char-set:whitespace)))
+
+(define iws+
+  (one-or-more (in char-set:blank)))
+
+(define iws*
+  (zero-or-more (in char-set:blank)))
+
 (define reserved
-  (let ((cs:reserved (string->char-set "#:,{}[]\n")))
+  ; (let ((cs:reserved (string->char-set "#:,{}[]\n")))
+  (let ((cs:reserved (string->char-set "#:,{}[]")))
     (in cs:reserved)))
 
 (define newline~
@@ -24,16 +38,33 @@
 (define eol
   (any-of newline~ end-of-input))
 
+; (define comment
+;   (preceded-by (is #\#)
+;                ws*
+;                (as-string (zero-or-more (none-of* newline~ item)))))
+
 (define comment
-  (preceded-by (is #\#)
-               (maybe whitespace)
-               (as-string (zero-or-more (none-of* newline~ item)))))
+  (as-string (enclosed-by (sequence (is #\#) ws*)
+                          (zero-or-more (none-of* eol item))
+                          eol)))
+
+(define ignored
+  (zero-or-more (any-of ws+ comment)))
+
+; (define line-end
+  ; (sequence iws* (maybe comment) eol))
 
 (define line-end
-  (sequence (maybe comment) eol))
+  (sequence iws* (any-of comment eol)))
+
+;(define separator
+;  (sequence iws* (any-of (is #\,) line-end) iws*))
+
+;(define separator
+  ;(sequence iws* (any-of (sequence (is #\,) iws*) line-end)))
 
 (define separator
-  (sequence (maybe whitespace) (any-of (is #\,) line-end) (maybe whitespace)))
+  (sequence iws* (any-of line-end (sequence (is #\,) iws*))))
 
 (define escape-sequence
   (let ((cs:esc (list->char-set '(#\alarm #\vtab #\page #\newline #\tab #\backspace))))
@@ -70,14 +101,17 @@
         (lambda (s) (result (string->number s)))))
 
 (define float
-  (sequence (maybe (is #\-))
-            (any-of (sequence (one-or-more (in char-set:digit)) (is #\.)
-                              (zero-or-more (in char-set:digit)))
-                    (sequence (zero-or-more (in char-set:digit)) (is #\.)
-                              (one-or-more (in char-set:digit))))))
+  (bind
+    (as-string
+      (sequence (maybe (is #\-))
+                (any-of (sequence (one-or-more (in char-set:digit)) (is #\.)
+                                  (zero-or-more (in char-set:digit)))
+                        (sequence (zero-or-more (in char-set:digit)) (is #\.)
+                                  (one-or-more (in char-set:digit))))))
+    (lambda (s) (result (string->number s)))))
 
 (define number
-  (any-of integer float))
+  (any-of float integer))
 
 (define boolean
   (let ((cs:t (string->char-set "Tt"))
@@ -119,44 +153,54 @@
                 number-list-content
                 boolean-list-content
                 string-list-content)
-        (lambda (lst) (result (flatten lst)))))
+        (lambda (lst) (result (list->vector (flatten lst))))))
 
 (define list~
   (enclosed-by (is #\[)
-               (any-of list-content (maybe whitespace))
+               (any-of list-content ws*)
                (is #\])))
 
 (define dict-key string~)
 
-; MRP stands for "mutually recursive parser"
-(define-syntax mrp
-  (syntax-rules ()
-    ((_ fn) (lambda args (apply fn args)))))
-
 (define dict-value
-  (mrp
-    (any-of integer float number boolean string~ list~ dict)))
+  (recursive-parser
+    (any-of number boolean string~ list~ dict)))
 
 (define dict-entry
-  (sequence dict-key
-            (maybe whitespace)
-            (is #\:)
-            (maybe whitespace)
-            dict-value))
+  (bind
+    (sequence dict-key ws* (is #\:) ws* dict-value)
+    (lambda (entry-contents)
+      (let ((key (string-trim-both (car entry-contents)))
+            (value (car (cddddr entry-contents))))
+        (result (cons (string->symbol key) value))))))
 
 (define dict-content
-  (sequence (maybe whitespace)
-            (maybe (sequence dict-entry
-                             (zero-or-more (sequence separator dict-entry))))
-            (maybe whitespace)))
+  (bind
+    (enclosed-by ignored
+                 ;(any-of (sequence dict-entry
+                                   ;(one-or-more
+                                     ;(preceded-by separator dict-entry)))
+;                  (any-of (sequence (one-or-more
+;                                      (followed-by dict-entry separator))
+;                                    dict-entry)
+;                          (maybe dict-entry))
+;                  (maybe (sequence (zero-or-more
+;                                     (followed-by dict-entry separator))
+;                                   dict-entry))
+                 (maybe (sequence dict-entry
+                                  (zero-or-more
+                                    (preceded-by separator dict-entry))))
+                 ignored)
+    (lambda (cont)
+      (result
+        (cond
+          ((not cont) '())
+          ((null? cont) '())
+          ((null? (cdr cont)) cont)
+          (else `(,(car cont) ,@(cadr cont))))))))
 
 (define dict
   (enclosed-by (is #\{) dict-content (is #\})))
-
-(define (parse-rascl-file filename)
-  (with-input-from-file filename
-    (lambda ()
-      (parse dict-content (read-all (current-input-port))))))
 
 ) ; END MODULE
 
