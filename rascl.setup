@@ -1,0 +1,9 @@
+(compile -O -s rascl-parser.scm -j rascl-parser)
+(compile -O -s rascl-parser.import.scm)
+(compile -O -s rascl.scm -j rascl)
+(compile -O -s rascl.import.scm)
+(install-extension
+  'rascl
+  '("rascl-parser.so" "rascl-parser.import.so"
+    "rascl.so" "rascl.import.so")
+  '((version "0.1")))

@@ -1,0 +1,6 @@
+((license "BSD")
+ (category parsing)
+ (depends comparse)
+ (test-depends test)
+ (author "Matt Gushee")
+ (synopsis "A library for reading and writing RASCL configuration files."))
