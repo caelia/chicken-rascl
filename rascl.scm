@@ -7,6 +7,9 @@
         (set-system-config-path
          set-user-config-path
          load-config)
+        (import scheme chicken)
+        (require-library rascl-parser)
+        (reexport rascl-parser)
 
 (define *system-config-path* (make-parameter #f))
 (define *user-config-path* (make-parameter #f))
@@ -16,6 +19,24 @@
 
 (define (set-user-config-path path)
   (*user-config-path* path))
+
+(define (load-config path)
+  #f)
+
+(define (merge-config conf1 conf2)
+  #f)
+
+(define (save-config conf)
+  #f)
+
+(define (check-config conf)
+  #f)
+
+(define (config-get conf key)
+  #f)
+
+(define (config-set! conf key value)
+  #f)
 
 (define (write-system-config data)
   #f)
@@ -39,7 +60,7 @@
          (check-config (*user-config-path*)))
         (else
           (if (null? args)
-            (config-get arg data)
-            (config-set arg args data)))))))
+            (config-get data arg)
+            (config-set! data arg args)))))))
         
 )
