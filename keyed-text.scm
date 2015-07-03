@@ -6,21 +6,14 @@
 (module keyed-text
         *
         (import scheme chicken)
+	(use matchable)
 
-(define-record-type ktext
-  (make-ktext% keys data)
-  ktext?
-  (keys ktext-keys ktext-keys-set!)
-  (data ktext-data ktext-data-set!))
-
-(define (make-ktext #!key (keys '()) (data #f))
-  (make-ktext% keys data))
+(define (make-ktext #!key (keys '()) (data ""))
+  `(,keys ,data))
 
 (define (ktext-size ktext)
-  (let ((data (ktext-data ktext)))
-    (if (ktext? data)
-      (ktext-size data)
-      (string-length data))))
+  (match ktext
+    [(_ data) (string-length data)]))
 
 (define (get-sub key keys text)
   (let* ((key-data (alist-ref key keys))
@@ -32,6 +25,10 @@
       subkeys)))
 
 (define (ktext-ref ktext key)
+  (match `(,key ,ktext)
+    [(() _) (error "Invalid key")]
+    [((k sk) (keys data))
+     (let ((text-ref (alist-ref k keys))
   (let loop ((content (ktext-data ktext))
              (keys (ktext-keys ktext))
              (key2find key))
