@@ -6,8 +6,19 @@
 (module keyed-text
         *
         (import scheme chicken)
-	(use matchable)
-	(use srfi-13)
+  (use matchable)
+  (use srfi-13)
+
+(define-record-type keydata
+  (make-keydata% start len subkeys meta)
+  keydata?
+  (start keydata-start keydata-start-set!)
+  (len keydata-len keydata-len-set!)
+  (subkeys keydata-subkeys keydata-subkeys-set!)
+  (meta keydata-meta keydata-meta-set!))
+
+(define (make-keydata start len #!key (subkeys '()) (meta '()))
+  (make-keydata% start len subkeys meta))
 
 (define (make-ktext #!key (keys '()) (data ""))
   `(,keys ,data))
@@ -32,7 +43,7 @@
      (get-sub k keys data)]
     [((k . sk) (keys data))
      (let-values (((subtext subkeys) (get-sub k keys data)))
-     	 (ktext-ref (make-ktext subkeys subtext) sk))]
+        (ktext-ref (make-ktext subkeys subtext) sk))]
     [(k (keys data))
      (get-sub k keys data)]))
 
@@ -40,32 +51,68 @@
   (map
     (lambda (key-data)
       (if (>= (car key-data) start)
-	`(,(+ (car key-data) delta) ,@(cdr key-data))
-	key-data))
+  `(,(+ (car key-data) delta) ,@(cdr key-data))
+  key-data))
     keys))
 
+(define (ktext-replace% key keys value text)
+  (let* ((new-len
+           (string-length value))
+         (simple-replace
+          (lambda (key keys value text)
+            (let* ((key-data (alist-ref key keys))
+                   (start (car key-data))
+                   (old-len (cadr key-data))
+                   (delta (- new-len old-len)))
+              (values
+                (realign-keys keys start delta)
+                (string-replace text value start (+ start old-len)))))))
+  (match key
+    [() (error "Invalid key")]
+    [(k) (simple-replace k keys value text)]
+    [(k . sk) 
+     (let-values (((subkeys subtext) (get-sub key keys text)))
+       (ktext-replace% sk subkeys value subtext))]
+    [k (simple-replace k keys value text)])))
+
 (define (ktext-replace ktext key value)
-  (let ((new-len
-	  (string-length value))
-	(simple-replace
-	  (lambda (key keys value data)
-	    (let* ((key-data (alist-ref key keys))
-		   (start (car key-data))
-		   (old-len (cadr key-data))
-		   (delta (- new-len old-len)))
-	      (make-ktext
-		(realign-keys keys start delta)
-		(string-replace data value start (+ start old-len)))))))
-    (match `(,key ,ktext)
-      [(() _) (error "Invalid key")]
-      [((k) (keys data))
-       (simple-replace k keys value data)]
-      [((k . sk) (keys data))
-       #f])))
+  (match ktext
+    [(keys data)
+     (let-values (((newkeys newtext) (ktext-replace% key keys value data)))
+       `(,newkeys ,newtext))]))
 
-(define (ktext-insert ktext key value #!key (before #f) (after #f) (index #f))
-  (unless (or before after index)
-    (error "You must specify one of the keyword arguments 'before', 'after', or 'index'))
-  #f)
+;  (let ((new-len
+;          (string-length value))
+;        (replace-parts
+;          (lambda (key keys value data)
+;            (let* ((key-data (alist-ref key keys))
+;                   (start (car key-data))
+;                   (old-len (cadr key-data))
+;                   (delta (- new-len old-len)))
+;              (values
+;                (realign-keys keys start delta)
+;                (string-replace data value start (+ start old-len))))))
+;        (simple-replace
+;          (lambda (key keys value data)
+;            (let-values (((subkeys subtext) (replace-parts key keys value data)))
+;              (make-ktext subkeys subtext))))
+;        (rec-replace
+;          (lambda (key keys value data)
+;	    (let-values (((subkeys subtext) (replace-parts 
+;    (match `(,key ,ktext)
+;      [(() _) (error "Invalid key")]
+;      [((k) (keys data))
+;       (simple-replace k keys value data)]
+;      [((k . sk) (keys data))
+;       (let 
+;      [((k) (keys data))
+;       (simple-replace k keys value data)]
 
+; POSITION must be one of '(before KEY), '(after KEY), 'at-start, or 'at-end 
+(define (ktext-insert% key keys value text position)
+  (match key
+    [() (error "Invalid key")]
+    [(k) 
+
+(define (ktext-insert ktext key value position)
 ) ; END MODULE
